@@ -5,5 +5,11 @@
     "board/esp32c6-ftdi.cfg"
 ],
 "idf.portWin": "COM15",
-"idf.flashType": "UART"
+"idf.flashType": "UART",
+"files.associations": {
+    "sdkconfig": "properties",
+    "*.defaults": "properties",
+    "*.old": "properties",
+    "queue.h": "c"
+}
 }
