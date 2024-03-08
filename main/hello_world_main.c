@@ -207,6 +207,38 @@ void pwmTask(){
 }
 
 
+void fadeTask(){
+    // Timer
+    ledc_timer_config_t timer_config = {
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .timer_num = LEDC_TIMER_1,
+        .freq_hz = 5000,
+        .duty_resolution = LEDC_TIMER_12_BIT, // 0 - 4095
+        .clk_cfg = LEDC_AUTO_CLK
+    };
+    ledc_timer_config(&timer_config);
+
+    // PWM 
+    ledc_channel_config_t channel_config = {
+        .channel = LEDC_CHANNEL_0,
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .timer_sel = LEDC_TIMER_1,
+        .intr_type = LEDC_INTR_DISABLE,
+        .gpio_num = GPIO_NUM_14,
+        .duty = 0
+    };
+    ledc_channel_config(&channel_config);
+    ledc_fade_func_install(0);
+
+    while(1) {
+       ledc_set_fade_time_and_start(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 4095, 2000, LEDC_FADE_WAIT_DONE);
+       vTaskDelay(200/portTICK_PERIOD_MS);
+       ledc_set_fade_time_and_start(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0, 2000, LEDC_FADE_WAIT_DONE);
+       vTaskDelay(200/portTICK_PERIOD_MS);
+    }  
+}
+
+
 
 void app_main(void) {
     printf("Program init!\n");
@@ -227,6 +259,7 @@ void app_main(void) {
     xTaskCreate(buttonTask, "BUTTON TASK", 2048, NULL, 2, NULL);
     xTaskCreate(relayTask, "RELAY TASK", 2048, NULL, 2, NULL);
     xTaskCreate(pwmTask, "PWM TASK", 2048, NULL, 2, NULL);
+    xTaskCreate(fadeTask, "FADE TASK", 2048, NULL, 2, NULL);
     xTaskCreate(ledTask, "LED TASK", 2048, NULL, 2, NULL);    
 
     // int resultado = soma(10, 20);
