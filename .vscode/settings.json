@@ -10,6 +10,9 @@
     "sdkconfig": "properties",
     "*.defaults": "properties",
     "*.old": "properties",
-    "queue.h": "c"
+    "queue.h": "c",
+    "adc_cali_scheme.h": "c",
+    "adccalibration.h": "c",
+    "adc_oneshot.h": "c"
 }
 }

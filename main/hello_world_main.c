@@ -26,6 +26,7 @@
 #include "calculadora.h"
 #include "led.h"
 #include "relay.h"
+#include "adcCalibration.h"
 
 
 #define LED_PIN_1 16
@@ -242,8 +243,32 @@ void fadeTask(){
 }
 
 
-void adcTask(){
+// void adcTask(){
+//     int adc_raw; 
+//     int voltage;
+//     adc_oneshot_unit_handle_t adc1_handle;
+//     adc_oneshot_unit_init_cfg_t init_config = {
+//         .unit_id = ADC_UNIT_1,
+//     };
+//     ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config, &adc1_handle));
+//     adc_oneshot_chan_cfg_t config = {
+//         .bitwidth = ADC_BITWIDTH_DEFAULT,
+//         .atten = ADC_ATTEN_DB_12,
+//     };
+//     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, ADC_CHANNEL_0, &config));
+//     while(1) {
+//         ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_0, &adc_raw));
+//         ESP_LOGI(TAG, "ADC%d channel[%d] Raw data: %d", ADC_UNIT_1+1, ADC_CHANNEL_0, adc_raw);
+//         voltage = (adc_raw * 2500) / 8192;
+//         ESP_LOGI(TAG, "ADC%d channel[%d] Voltage: %dmV", ADC_UNIT_1+1, ADC_CHANNEL_0, voltage);
+//         vTaskDelay(pdMS_TO_TICKS(1000));
+//     }
+// }
+
+
+void adcCallibrateTask(){
     int adc_raw; 
+    int voltage;
     adc_oneshot_unit_handle_t adc1_handle;
     adc_oneshot_unit_init_cfg_t init_config = {
         .unit_id = ADC_UNIT_1,
@@ -251,17 +276,29 @@ void adcTask(){
     ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config, &adc1_handle));
     adc_oneshot_chan_cfg_t config = {
         .bitwidth = ADC_BITWIDTH_DEFAULT,
-        .atten = ADC_ATTEN_DB_11,
+        .atten = ADC_ATTEN_DB_12,
     };
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, ADC_CHANNEL_0, &config));
+
+    adc_cali_handle_t adc1_cali_chan0_handle = NULL;
+    bool do_calibration1_chan0 = example_adc_calibration_init(ADC_UNIT_1, ADC_CHANNEL_0, ADC_ATTEN_DB_12, &adc1_cali_chan0_handle);
 
     while(1) {
         ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_0, &adc_raw));
         ESP_LOGI(TAG, "ADC%d channel[%d] Raw data: %d", ADC_UNIT_1+1, ADC_CHANNEL_0, adc_raw);
+        if (do_calibration1_chan0) {
+            ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan0_handle, adc_raw, &voltage));
+            ESP_LOGI(TAG, "ADC%d channel[%d] Voltage: %dmV", ADC_UNIT_1+1, ADC_CHANNEL_0, voltage);
+        }        
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
-}
 
+    ESP_ERROR_CHECK(adc_oneshot_del_unit(adc1_handle));
+    if (do_calibration1_chan0) {
+        example_adc_calibration_deinit(adc1_cali_chan0_handle);
+    }
+
+}
 
 
 void app_main(void) {
@@ -285,7 +322,8 @@ void app_main(void) {
     xTaskCreate(pwmTask, "PWM TASK", 2048, NULL, 2, NULL);
     xTaskCreate(fadeTask, "FADE TASK", 2048, NULL, 2, NULL);
     xTaskCreate(ledTask, "LED TASK", 2048, NULL, 2, NULL);
-    xTaskCreate(adcTask, "ADC TASK", 2048, NULL, 2, NULL);
+    // xTaskCreate(adcTask, "ADC TASK", 2048, NULL, 2, NULL);
+    xTaskCreate(adcCallibrateTask, "ADC CALIBRATE TASK", 2048, NULL, 2, NULL);
 
     // int resultado = soma(10, 20);
     // printf("Resultado: %d\n", resultado);
