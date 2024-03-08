@@ -18,6 +18,9 @@
 // PWM
 #include "driver/ledc.h"
 
+// ADC
+#include "esp_adc/adc_oneshot.h"
+
 
 // My components
 #include "calculadora.h"
@@ -239,6 +242,27 @@ void fadeTask(){
 }
 
 
+void adcTask(){
+    int adc_raw; 
+    adc_oneshot_unit_handle_t adc1_handle;
+    adc_oneshot_unit_init_cfg_t init_config = {
+        .unit_id = ADC_UNIT_1,
+    };
+    ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config, &adc1_handle));
+    adc_oneshot_chan_cfg_t config = {
+        .bitwidth = ADC_BITWIDTH_DEFAULT,
+        .atten = ADC_ATTEN_DB_11,
+    };
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, ADC_CHANNEL_0, &config));
+
+    while(1) {
+        ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_0, &adc_raw));
+        ESP_LOGI(TAG, "ADC%d channel[%d] Raw data: %d", ADC_UNIT_1+1, ADC_CHANNEL_0, adc_raw);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+
 
 void app_main(void) {
     printf("Program init!\n");
@@ -260,7 +284,8 @@ void app_main(void) {
     xTaskCreate(relayTask, "RELAY TASK", 2048, NULL, 2, NULL);
     xTaskCreate(pwmTask, "PWM TASK", 2048, NULL, 2, NULL);
     xTaskCreate(fadeTask, "FADE TASK", 2048, NULL, 2, NULL);
-    xTaskCreate(ledTask, "LED TASK", 2048, NULL, 2, NULL);    
+    xTaskCreate(ledTask, "LED TASK", 2048, NULL, 2, NULL);
+    xTaskCreate(adcTask, "ADC TASK", 2048, NULL, 2, NULL);
 
     // int resultado = soma(10, 20);
     // printf("Resultado: %d\n", resultado);
