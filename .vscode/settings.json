@@ -1,8 +1,8 @@
 {
 "C_Cpp.intelliSenseEngine": "default",
-"idf.adapterTargetName": "esp32s2",
+"idf.adapterTargetName": "esp32c6",
 "idf.openOcdConfigs": [
-    "board/esp32s2-kaluga-1.cfg"
+    "board/esp32c6-ftdi.cfg"
 ],
 "idf.portWin": "COM15",
 "idf.flashType": "UART",

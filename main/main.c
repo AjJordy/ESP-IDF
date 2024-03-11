@@ -25,6 +25,9 @@
 #include "driver/dac_oneshot.h"
 #include "driver/dac_cosine.h"
 
+// Temperature
+#include "driver/temperature_sensor.h"
+
 
 // My components
 #include "calculadora.h"
@@ -350,6 +353,25 @@ void dacCosineTask(){
 #endif
 
 
+void temperatureTask(){
+    ESP_LOGI(TAG, "Install temperature sensor, expected temp ranger range: 10-50 °C");
+    temperature_sensor_handle_t temp_sensor = NULL;
+    temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(10, 50);
+    ESP_ERROR_CHECK(temperature_sensor_install(&temp_sensor_config, &temp_sensor));
+    ESP_LOGI(TAG, "Enable temperature sensor");
+    ESP_ERROR_CHECK(temperature_sensor_enable(temp_sensor));
+    ESP_LOGI(TAG, "Read temperature sensor");
+    ESP_LOGI(TAG, "Read temperature");
+    int cnt = 20;
+    float tsense_value;
+    while (cnt--){
+        ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_sensor, &tsense_value));
+        ESP_LOGI(TAG, "Temperature value %.02f °C", tsense_value);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+
 void app_main(void) {
     printf("Program init!\n");
     // esp_log_level_set(TAG, ESP_LOG_NONE);
@@ -372,7 +394,8 @@ void app_main(void) {
     xTaskCreate(fadeTask, "FADE TASK", 2048, NULL, 2, NULL);
     xTaskCreate(ledTask, "LED TASK", 2048, NULL, 2, NULL);
     // xTaskCreate(adcTask, "ADC TASK", 2048, NULL, 2, NULL);
-    xTaskCreate(adcCallibrateTask, "ADC CALIBRATE TASK", 2048, NULL, 2, NULL);
+    xTaskCreate(adcCallibrateTask, "ADC CALIBRATE TASK", 2048, NULL, 2, NULL);    
+    xTaskCreate(temperatureTask, "TEMPERATURE TASK", 2048, NULL, 2, NULL);
 
     #if SOC_DAC_SUPPORTED
     xTaskCreate(dacTask, "DAC TASK", 2048, NULL, 2, NULL);
