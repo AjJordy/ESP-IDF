@@ -21,6 +21,10 @@
 // ADC
 #include "esp_adc/adc_oneshot.h"
 
+// DAC
+#include "driver/dac_oneshot.h"
+#include "driver/dac_cosine.h"
+
 
 // My components
 #include "calculadora.h"
@@ -301,6 +305,51 @@ void adcCallibrateTask(){
 }
 
 
+#if SOC_DAC_SUPPORTED
+void dacTask(){
+    uint8_t val = 0;
+    dac_oneshot_handle_t chan0_handle;
+    dac_oneshot_config_t chan0_cfg = {
+        .chan_id = DAC_CHAN_0,
+    };
+    ESP_ERROR_CHECK(dac_oneshot_new_channel(&chan0_cfg, &chan0_handle));
+    ESP_LOGI(TAG, "DAC oneshot example start.");
+
+    while(1){
+        // Ramp
+        for (val=0; val<255; val++){
+            ESP_ERROR_CHECK(dac_oneshot_output_voltage(chan0_handle, val)); // 0 - 255 ~ 0 - 3.3v
+            vTaskDelay(pdMS_TO_TICKS(1));
+        }
+    }
+}
+
+
+void dacCosineTask(){
+    dac_cosine_handle_t chan0_handle;
+    dac_cosine_config_t cos0_cfg = {
+        .chan_id = DAC_CHAN_0,
+        .freq_hz = 1000, // 1kHz
+        .clk_src = DAC_COSINE_CLK_SRC_DEFAULT, // default clock source
+        .offset = 0, // 0V
+        .phase = DAC_COSINE_PHASE_0, // 0 degrees
+        .atten = DAC_COSINE_ATTEN_DEFAULT, // default attenuation 
+        .flags.force_set_freq = false, // do not force frequency
+    };
+
+    ESP_LOGI(TAG, "Initializing DAC cosine wave generator...");
+    ESP_ERROR_CHECK(dac_cosine_new_channel(&cos0_cfg, &chan0_handle));
+    ESP_ERROR_CHECK(dac_cosine_start(chan0_handle));
+    ESP_LOGI(TAG, "DAC cosine initialized");
+    
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+    
+}
+#endif
+
+
 void app_main(void) {
     printf("Program init!\n");
     // esp_log_level_set(TAG, ESP_LOG_NONE);
@@ -324,6 +373,11 @@ void app_main(void) {
     xTaskCreate(ledTask, "LED TASK", 2048, NULL, 2, NULL);
     // xTaskCreate(adcTask, "ADC TASK", 2048, NULL, 2, NULL);
     xTaskCreate(adcCallibrateTask, "ADC CALIBRATE TASK", 2048, NULL, 2, NULL);
+
+    #if SOC_DAC_SUPPORTED
+    xTaskCreate(dacTask, "DAC TASK", 2048, NULL, 2, NULL);
+    xTaskCreate(dacCosineTask, "DAC COSINE TASK", 2048, NULL, 2, NULL);    
+    #endif
 
     // int resultado = soma(10, 20);
     // printf("Resultado: %d\n", resultado);

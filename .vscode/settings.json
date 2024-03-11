@@ -1,8 +1,8 @@
 {
 "C_Cpp.intelliSenseEngine": "default",
-"idf.adapterTargetName": "esp32c6",
+"idf.adapterTargetName": "esp32s2",
 "idf.openOcdConfigs": [
-    "board/esp32c6-ftdi.cfg"
+    "board/esp32s2-kaluga-1.cfg"
 ],
 "idf.portWin": "COM15",
 "idf.flashType": "UART",
@@ -13,6 +13,9 @@
     "queue.h": "c",
     "adc_cali_scheme.h": "c",
     "adccalibration.h": "c",
-    "adc_oneshot.h": "c"
+    "adc_oneshot.h": "c",
+    "dac_oneshot.h": "c",
+    "dac_types.h": "c",
+    "esp_err.h": "c"
 }
 }
