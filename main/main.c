@@ -45,11 +45,16 @@
 #define RELAY_PIN_1 21
 #define RELAY_PIN_2 22
 
+#define LED_DELAY 1000
+
 Relay relay1, relay2; 
 
 static const char *TAG = "Example";
 static QueueHandle_t gpio_evt_queue = NULL;
 
+TaskHandle_t xTaskLedHandle = NULL;
+TaskHandle_t xTaskButtonHandle = NULL;
+TaskHandle_t xTaskPWMHandle = NULL;
 
 
 static void IRAM_ATTR gpio_isr_handler(void *arg) {
@@ -59,6 +64,7 @@ static void IRAM_ATTR gpio_isr_handler(void *arg) {
 
 
 void ledTask(void *pvParameters) {
+    ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     // Configure Outputs
     // gpio_reset_pin(LED_PIN_1);
     // gpio_reset_pin(LED_PIN_2);
@@ -68,6 +74,7 @@ void ledTask(void *pvParameters) {
     // gpio_set_level(LED_PIN_1, 0);
     // gpio_set_level(LED_PIN_2, 0);
     // gpio_set_level(LED_PIN_3, 0);
+
     gpio_config_t io_config = {};
     io_config.pin_bit_mask = (1ULL<<LED_PIN_1) | (1ULL<<LED_PIN_2) | (1ULL<<LED_PIN_3); 
     io_config.mode = GPIO_MODE_OUTPUT;
@@ -76,19 +83,32 @@ void ledTask(void *pvParameters) {
     io_config.intr_type = GPIO_INTR_DISABLE;
     gpio_config(&io_config);  
 
+    int led_delay = (int) pvParameters;
+
+    int count = 0;
     while (true) {        
         gpio_set_level(LED_PIN_1, 1);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        // vTaskDelay(1000 / portTICK_PERIOD_MS);
+        vTaskDelay(pdMS_TO_TICKS(led_delay));
+        // vTaskDelay(led_delay / portTICK_PERIOD_MS);
 
         gpio_set_level(LED_PIN_1, 0);   
-        vTaskDelay(pdMS_TO_TICKS(1000));     
-        // vTaskDelay(1000 / portTICK_PERIOD_MS);
+        vTaskDelay(pdMS_TO_TICKS(led_delay));     
+        // vTaskDelay(led_delay / portTICK_PERIOD_MS);
+
+        // Delete task
+        count++;
+        if (count == 1024) {
+            gpio_set_level(LED_PIN_1, 0);
+            vTaskDelete(NULL); //(xTaskLedHandle);
+            // vTaskSuspend(NULL);
+            // vTaskResume(NULL);
+        }
     }
 }
 
 
 void buttonTask(void *pvParameters) {
+    ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     uint32_t gpio_num;
     TickType_t last_button_press = 0;
     bool led_state = 0;
@@ -144,6 +164,7 @@ void buttonTask(void *pvParameters) {
 
 
 void relayTask(void *pvParameters){
+    ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     
     // ---------- Config relays ----------
     relay_init(&relay1, RELAY_PIN_1);
@@ -151,21 +172,22 @@ void relayTask(void *pvParameters){
 
     while (true) {
         relay_turn_on(&relay1);
-        printf("Status do rele 1: %d\n", relay_get_status(&relay1));
+        printf("[%s] Status do rele 1: %d\n", pcTaskGetName(NULL), relay_get_status(&relay1));
         relay_turn_off(&relay2);
-        printf("Status do rele 2: %d\n", relay_get_status(&relay2));
+        printf("[%s] Status do rele 2: %d\n", pcTaskGetName(NULL), relay_get_status(&relay2));
         vTaskDelay(5000 / portTICK_PERIOD_MS);
 
         relay_turn_off(&relay1);
-        printf("Status do rele 1: %d\n", relay_get_status(&relay1));
+        printf("[%s] Status do rele 1: %d\n", pcTaskGetName(NULL), relay_get_status(&relay1));
         relay_turn_on(&relay2);
-        printf("Status do rele 2: %d\n", relay_get_status(&relay2));
+        printf("[%s] Status do rele 2: %d\n", pcTaskGetName(NULL), relay_get_status(&relay2));
         vTaskDelay(5000 / portTICK_PERIOD_MS);    
     }
 }
 
 
 void pwmTask(){
+    ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     // ---------- PWM ----------
     ledc_timer_config_t timer_config = {
         .speed_mode = LEDC_LOW_SPEED_MODE,
@@ -220,6 +242,7 @@ void pwmTask(){
 
 void fadeTask(){
     // Timer
+    ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     ledc_timer_config_t timer_config = {
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .timer_num = LEDC_TIMER_1,
@@ -276,6 +299,7 @@ void fadeTask(){
 void adcCallibrateTask(){
     int adc_raw; 
     int voltage;
+    ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     adc_oneshot_unit_handle_t adc1_handle;
     adc_oneshot_unit_init_cfg_t init_config = {
         .unit_id = ADC_UNIT_1,
@@ -354,6 +378,7 @@ void dacCosineTask(){
 
 
 void temperatureTask(){
+    ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     ESP_LOGI(TAG, "Install temperature sensor, expected temp ranger range: 10-50 °C");
     temperature_sensor_handle_t temp_sensor = NULL;
     temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(10, 50);
@@ -365,7 +390,7 @@ void temperatureTask(){
     float tsense_value;
     while (1){
         ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_sensor, &tsense_value));
-        ESP_LOGI(TAG, "Temperature value %.02f °C", tsense_value);
+        ESP_LOGI(TAG, "Temperature value %.02f °C", tsense_value);        
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
@@ -378,7 +403,7 @@ void app_main(void) {
     // esp_log_level_set(TAG, ESP_LOG_WARN);
     // esp_log_level_set(TAG, ESP_LOG_INFO);
     // esp_log_level_set(TAG, ESP_LOG_DEBUG);
-    // esp_log_level_set(TAG, ESP_LOG_VERBOSE);
+    esp_log_level_set(TAG, ESP_LOG_VERBOSE);
     ESP_LOGE(TAG, "Error");
     ESP_LOGW(TAG, "Warning");
     ESP_LOGI(TAG, "Info");
@@ -387,11 +412,20 @@ void app_main(void) {
 
 
     // ---------- Creating tasks ----------
-    xTaskCreate(buttonTask, "BUTTON TASK", 2048, NULL, 2, NULL);
+    xTaskCreate(
+        ledTask,            // Task function
+        "LED TASK",         // Task name
+        2048,               // Stack size
+        (void*) LED_DELAY,  // Parameters 
+        2,                  // less 1 - 5 more 
+        &xTaskLedHandle     // task reference
+    );
+
+    // xTaskCreatePinnedToCore(buttonTask, "BUTTON TASK", 2048, NULL, 2, &xTaskButtonHandle, 0);
+    xTaskCreate(buttonTask, "BUTTON TASK", 2048, NULL, 2, &xTaskButtonHandle);
     xTaskCreate(relayTask, "RELAY TASK", 2048, NULL, 2, NULL);
-    xTaskCreate(pwmTask, "PWM TASK", 2048, NULL, 2, NULL);
+    xTaskCreate(pwmTask, "PWM TASK", 2048, NULL, 2, &xTaskPWMHandle);
     xTaskCreate(fadeTask, "FADE TASK", 2048, NULL, 2, NULL);
-    xTaskCreate(ledTask, "LED TASK", 2048, NULL, 2, NULL);
     // xTaskCreate(adcTask, "ADC TASK", 2048, NULL, 2, NULL);
     xTaskCreate(adcCallibrateTask, "ADC CALIBRATE TASK", 2048, NULL, 2, NULL);    
     xTaskCreate(temperatureTask, "TEMPERATURE TASK", 2048, NULL, 2, NULL);
@@ -405,7 +439,11 @@ void app_main(void) {
     // printf("Resultado: %d\n", resultado);
     // liga_led();
     
+    ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     while(1) {
-        vTaskDelay(5000 / portTICK_PERIOD_MS);
+        vTaskDelay(3000 / portTICK_PERIOD_MS);
+        ESP_LOGI(TAG, "Led High water mark: %d", uxTaskGetStackHighWaterMark(xTaskLedHandle));
+        ESP_LOGI(TAG, "Button High water mark: %d", uxTaskGetStackHighWaterMark(xTaskButtonHandle));
+        ESP_LOGI(TAG, "PWM High water mark: %d", uxTaskGetStackHighWaterMark(xTaskPWMHandle));
     }    
 }
