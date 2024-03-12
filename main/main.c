@@ -39,8 +39,8 @@
 #define LED_PIN_1 16
 #define LED_PIN_2 17
 #define LED_PIN_3 18
-#define BUTTON_PIN_1 19
-#define BUTTON_PIN_2 20
+#define BUTTON_PIN_1 9 //19
+// #define BUTTON_PIN_2 20
 
 #define RELAY_PIN_1 21
 #define RELAY_PIN_2 22
@@ -87,18 +87,18 @@ void ledTask(void *pvParameters) {
 
     int count = 0;
     while (true) {        
-        gpio_set_level(LED_PIN_1, 1);
+        gpio_set_level(LED_PIN_2, 1);
         vTaskDelay(pdMS_TO_TICKS(led_delay));
         // vTaskDelay(led_delay / portTICK_PERIOD_MS);
 
-        gpio_set_level(LED_PIN_1, 0);   
+        gpio_set_level(LED_PIN_2, 0);   
         vTaskDelay(pdMS_TO_TICKS(led_delay));     
         // vTaskDelay(led_delay / portTICK_PERIOD_MS);
 
         // Delete task
         count++;
         if (count == 1024) {
-            gpio_set_level(LED_PIN_1, 0);
+            gpio_set_level(LED_PIN_2, 0);
             vTaskDelete(NULL); //(xTaskLedHandle);
             // vTaskSuspend(NULL);
             // vTaskResume(NULL);
@@ -113,20 +113,20 @@ void buttonTask(void *pvParameters) {
     TickType_t last_button_press = 0;
     bool led_state = 0;
 
-    // // Configure Inputs
-    // gpio_reset_pin(BUTTON_PIN_1);
-    // gpio_set_direction(BUTTON_PIN_1, GPIO_MODE_INPUT);
-    // gpio_pullup_en(BUTTON_PIN_1);
-    // // gpio_set_pull_mode(BUTTON_PIN_1, GPIO_PULLUP_ONLY);
-    // gpio_set_intr_type(BUTTON_PIN_1, GPIO_INTR_NEGEDGE);
+    // Configure Inputs
+    gpio_reset_pin(BUTTON_PIN_1);
+    gpio_set_direction(BUTTON_PIN_1, GPIO_MODE_INPUT);
+    gpio_pullup_en(BUTTON_PIN_1);
+    // gpio_set_pull_mode(BUTTON_PIN_1, GPIO_PULLUP_ONLY);
+    gpio_set_intr_type(BUTTON_PIN_1, GPIO_INTR_NEGEDGE);
     
-    gpio_config_t io_config;
-    io_config.pin_bit_mask = (1ULL<<BUTTON_PIN_1) | (1ULL<<BUTTON_PIN_2); 
-    io_config.mode = GPIO_MODE_INPUT;
-    io_config.pull_up_en = GPIO_PULLUP_ENABLE;
-    io_config.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_config.intr_type = GPIO_INTR_NEGEDGE;
-    gpio_config(&io_config);
+    // gpio_config_t io_config;
+    // io_config.pin_bit_mask = (1ULL<<BUTTON_PIN_1) | (1ULL<<BUTTON_PIN_2); 
+    // io_config.mode = GPIO_MODE_INPUT;
+    // io_config.pull_up_en = GPIO_PULLUP_ENABLE;
+    // io_config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    // io_config.intr_type = GPIO_INTR_NEGEDGE;
+    // gpio_config(&io_config);
 
     // ---------- Configuring interruptions ----------
     gpio_evt_queue = xQueueCreate(1, sizeof(uint32_t));
@@ -151,7 +151,6 @@ void buttonTask(void *pvParameters) {
 
         xQueueReceive(gpio_evt_queue, &gpio_num, portMAX_DELAY);
         ESP_LOGI(TAG, "GPIO[%li] intr\n", gpio_num);
-
         TickType_t current_time = xTaskGetTickCount();
         if (current_time - last_button_press >= pdMS_TO_TICKS(250)) {
             last_button_press = current_time;
@@ -316,12 +315,12 @@ void adcCallibrateTask(){
 
     while(1) {
         ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_0, &adc_raw));
-        ESP_LOGI(TAG, "ADC%d channel[%d] Raw data: %d", ADC_UNIT_1+1, ADC_CHANNEL_0, adc_raw);
+        // ESP_LOGI(TAG, "ADC%d channel[%d] Raw data: %d", ADC_UNIT_1+1, ADC_CHANNEL_0, adc_raw);
         if (do_calibration1_chan0) {
             ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan0_handle, adc_raw, &voltage));
             ESP_LOGI(TAG, "ADC%d channel[%d] Voltage: %dmV", ADC_UNIT_1+1, ADC_CHANNEL_0, voltage);
         }        
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 
     ESP_ERROR_CHECK(adc_oneshot_del_unit(adc1_handle));
@@ -391,7 +390,7 @@ void temperatureTask(){
     while (1){
         ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_sensor, &tsense_value));
         ESP_LOGI(TAG, "Temperature value %.02f °C", tsense_value);        
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
 
@@ -441,7 +440,7 @@ void app_main(void) {
     
     ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     while(1) {
-        vTaskDelay(3000 / portTICK_PERIOD_MS);
+        vTaskDelay(10000 / portTICK_PERIOD_MS);
         ESP_LOGI(TAG, "Led High water mark: %d", uxTaskGetStackHighWaterMark(xTaskLedHandle));
         ESP_LOGI(TAG, "Button High water mark: %d", uxTaskGetStackHighWaterMark(xTaskButtonHandle));
         ESP_LOGI(TAG, "PWM High water mark: %d", uxTaskGetStackHighWaterMark(xTaskPWMHandle));
