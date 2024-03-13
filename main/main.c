@@ -55,6 +55,7 @@ static const char *TAG = "Example";
 QueueHandle_t gpio_evt_queue = NULL;
 
 SemaphoreHandle_t xBinarySemaphore = NULL;
+SemaphoreHandle_t xCountingSemaphore = NULL;
 
 TaskHandle_t xTaskLedHandle = NULL;
 TaskHandle_t xTaskButtonHandle = NULL;
@@ -92,11 +93,16 @@ void ledTask(void *pvParameters) {
     int led_delay = (int) pvParameters;
     bool led_state = 0;
     int count = 0;
+
+    BaseType_t count = 0;
+
     while (true) {        
 
         if (xSemaphoreTake(xBinarySemaphore, portMAX_DELAY) == pdTRUE) {
             gpio_set_level(LED_PIN_2, led_state^=1);
             ESP_LOGI(TAG, "LED: %d", led_state);
+            // count = uxSemaphoreGetCount(xCountingSemaphore);
+            // ESP_LOGI(TAG, "Count: %d", count);
         }
 
         // gpio_set_level(LED_PIN_2, 1);
@@ -420,6 +426,7 @@ void app_main(void) {
     ESP_LOGV(TAG, "Verbose");
 
     xBinarySemaphore = xSemaphoreCreateBinary();
+    // xCountingSemaphore = xSemaphoreCreateCounting(255, 0);
 
 
     // ---------- Creating tasks ----------
