@@ -6,12 +6,13 @@
 
 #include <stdio.h>
 
-// FreeRTOS includes
+// ---- FreeRTOS includes ----
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 
-// ESP32 includes
+// ---- ESP32 includes ----
 #include "esp_log.h"
 #include "driver/gpio.h"
 
@@ -39,7 +40,7 @@
 #define LED_PIN_1 16
 #define LED_PIN_2 17
 #define LED_PIN_3 18
-#define BUTTON_PIN_1 9 //19
+#define BUTTON_PIN_1 9
 // #define BUTTON_PIN_2 20
 
 #define RELAY_PIN_1 21
@@ -50,7 +51,10 @@
 Relay relay1, relay2; 
 
 static const char *TAG = "Example";
-static QueueHandle_t gpio_evt_queue = NULL;
+
+QueueHandle_t gpio_evt_queue = NULL;
+
+SemaphoreHandle_t xBinarySemaphore = NULL;
 
 TaskHandle_t xTaskLedHandle = NULL;
 TaskHandle_t xTaskButtonHandle = NULL;
@@ -59,7 +63,9 @@ TaskHandle_t xTaskPWMHandle = NULL;
 
 static void IRAM_ATTR gpio_isr_handler(void *arg) {
     uint32_t gpio_num = (uint32_t)arg;
-    xQueueSendFromISR(gpio_evt_queue, &gpio_num, NULL);
+    BaseType_t xHigherPriorityTaskWoken = pdTRUE;
+    xQueueSendFromISR(gpio_evt_queue, &gpio_num, xHigherPriorityTaskWoken);
+    xSemaphoreGiveFromISR(xBinarySemaphore, &xHigherPriorityTaskWoken);
 }
 
 
@@ -84,25 +90,29 @@ void ledTask(void *pvParameters) {
     gpio_config(&io_config);  
 
     int led_delay = (int) pvParameters;
-
+    bool led_state = 0;
     int count = 0;
     while (true) {        
-        gpio_set_level(LED_PIN_2, 1);
-        vTaskDelay(pdMS_TO_TICKS(led_delay));
-        // vTaskDelay(led_delay / portTICK_PERIOD_MS);
 
-        gpio_set_level(LED_PIN_2, 0);   
-        vTaskDelay(pdMS_TO_TICKS(led_delay));     
-        // vTaskDelay(led_delay / portTICK_PERIOD_MS);
+        if (xSemaphoreTake(xBinarySemaphore, portMAX_DELAY) == pdTRUE) {
+            gpio_set_level(LED_PIN_2, led_state^=1);
+            ESP_LOGI(TAG, "LED: %d", led_state);
+        }
+
+        // gpio_set_level(LED_PIN_2, 1);
+        // vTaskDelay(pdMS_TO_TICKS(led_delay));
+
+        // gpio_set_level(LED_PIN_2, 0);   
+        // vTaskDelay(pdMS_TO_TICKS(led_delay));             
 
         // Delete task
-        count++;
-        if (count == 1024) {
-            gpio_set_level(LED_PIN_2, 0);
-            vTaskDelete(NULL); //(xTaskLedHandle);
-            // vTaskSuspend(NULL);
-            // vTaskResume(NULL);
-        }
+        // count++;
+        // if (count == 1024) {
+        //     gpio_set_level(LED_PIN_2, 0);
+        //     vTaskDelete(NULL); //(xTaskLedHandle);
+        //     // vTaskSuspend(NULL);
+        //     // vTaskResume(NULL);
+        // }
     }
 }
 
@@ -409,6 +419,8 @@ void app_main(void) {
     ESP_LOGD(TAG, "Debug");
     ESP_LOGV(TAG, "Verbose");
 
+    xBinarySemaphore = xSemaphoreCreateBinary();
+
 
     // ---------- Creating tasks ----------
     xTaskCreate(
@@ -421,7 +433,7 @@ void app_main(void) {
     );
 
     // xTaskCreatePinnedToCore(buttonTask, "BUTTON TASK", 2048, NULL, 2, &xTaskButtonHandle, 0);
-    xTaskCreate(buttonTask, "BUTTON TASK", 2048, NULL, 2, &xTaskButtonHandle);
+    xTaskCreate(buttonTask, "BUTTON TASK", 2048, NULL, 3, &xTaskButtonHandle);
     xTaskCreate(relayTask, "RELAY TASK", 2048, NULL, 2, NULL);
     xTaskCreate(pwmTask, "PWM TASK", 2048, NULL, 2, &xTaskPWMHandle);
     xTaskCreate(fadeTask, "FADE TASK", 2048, NULL, 2, NULL);

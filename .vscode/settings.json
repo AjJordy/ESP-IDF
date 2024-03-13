@@ -17,6 +17,7 @@
     "dac_oneshot.h": "c",
     "dac_types.h": "c",
     "esp_err.h": "c",
-    "cstdlib": "c"
+    "cstdlib": "c",
+    "semphr.h": "c"
 }
 }
