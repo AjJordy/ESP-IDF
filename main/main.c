@@ -56,10 +56,17 @@ QueueHandle_t gpio_evt_queue = NULL;
 
 SemaphoreHandle_t xBinarySemaphore = NULL;
 SemaphoreHandle_t xCountingSemaphore = NULL;
+SemaphoreHandle_t xMutexSemaphore = NULL;
 
 TaskHandle_t xTaskLedHandle = NULL;
 TaskHandle_t xTaskButtonHandle = NULL;
 TaskHandle_t xTaskPWMHandle = NULL;
+
+
+void sendSerialData(char *data) {
+    printf(data);
+    vTaskDelay(pdMS_TO_TICKS(100));
+}
 
 
 static void IRAM_ATTR gpio_isr_handler(void *arg) {
@@ -103,15 +110,16 @@ void ledTask(void *pvParameters) {
             ESP_LOGI(TAG, "LED: %d", led_state);
             // count = uxSemaphoreGetCount(xCountingSemaphore);
             // ESP_LOGI(TAG, "Count: %d", count);
+
+            xSemaphoreTake(xMutexSemaphore, portMAX_DELAY);
+            sendSerialData("TASK LED");
+            xSemaphoreGive(xMutexSemaphore);
         }
 
         // gpio_set_level(LED_PIN_2, 1);
         // vTaskDelay(pdMS_TO_TICKS(led_delay));
-
         // gpio_set_level(LED_PIN_2, 0);   
-        // vTaskDelay(pdMS_TO_TICKS(led_delay));             
-
-        // Delete task
+        // vTaskDelay(pdMS_TO_TICKS(led_delay));
         // count++;
         // if (count == 1024) {
         //     gpio_set_level(LED_PIN_2, 0);
@@ -427,6 +435,7 @@ void app_main(void) {
 
     xBinarySemaphore = xSemaphoreCreateBinary();
     // xCountingSemaphore = xSemaphoreCreateCounting(255, 0);
+    xMutexSemaphore = xSemaphoreCreateMutex();
 
 
     // ---------- Creating tasks ----------
@@ -460,6 +469,11 @@ void app_main(void) {
     ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     while(1) {
         vTaskDelay(10000 / portTICK_PERIOD_MS);
+
+        xSemaphoreTake(xMutexSemaphore, portMAX_DELAY);
+        sendSerialData("TASK MAIN");
+        xSemaphoreGive(xMutexSemaphore);
+
         ESP_LOGI(TAG, "Led High water mark: %d", uxTaskGetStackHighWaterMark(xTaskLedHandle));
         ESP_LOGI(TAG, "Button High water mark: %d", uxTaskGetStackHighWaterMark(xTaskButtonHandle));
         ESP_LOGI(TAG, "PWM High water mark: %d", uxTaskGetStackHighWaterMark(xTaskPWMHandle));
