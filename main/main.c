@@ -97,24 +97,24 @@ void ledTask(void *pvParameters) {
     io_config.intr_type = GPIO_INTR_DISABLE;
     gpio_config(&io_config);  
 
-    int led_delay = (int) pvParameters;
+    
     bool led_state = 0;
-    int count = 0;
+    // int led_delay = (int) pvParameters;
+    // int count = 0;
+    // BaseType_t count_semph = 0;
 
-    BaseType_t count = 0;
+    while (true) {  
 
-    while (true) {        
+        xSemaphoreTake(xMutexSemaphore, portMAX_DELAY);
+        sendSerialData(">>>> TASK LED\n");
+        xSemaphoreGive(xMutexSemaphore);      
 
         if (xSemaphoreTake(xBinarySemaphore, portMAX_DELAY) == pdTRUE) {
             gpio_set_level(LED_PIN_2, led_state^=1);
             ESP_LOGI(TAG, "LED: %d", led_state);
-            // count = uxSemaphoreGetCount(xCountingSemaphore);
-            // ESP_LOGI(TAG, "Count: %d", count);
-
-            xSemaphoreTake(xMutexSemaphore, portMAX_DELAY);
-            sendSerialData("TASK LED");
-            xSemaphoreGive(xMutexSemaphore);
-        }
+            // count_semph = uxSemaphoreGetCount(xCountingSemaphore);
+            // ESP_LOGI(TAG, "Count: %d", count_semph);           
+        }        
 
         // gpio_set_level(LED_PIN_2, 1);
         // vTaskDelay(pdMS_TO_TICKS(led_delay));
@@ -471,7 +471,7 @@ void app_main(void) {
         vTaskDelay(10000 / portTICK_PERIOD_MS);
 
         xSemaphoreTake(xMutexSemaphore, portMAX_DELAY);
-        sendSerialData("TASK MAIN");
+        sendSerialData(">>>> TASK MAIN\n");
         xSemaphoreGive(xMutexSemaphore);
 
         ESP_LOGI(TAG, "Led High water mark: %d", uxTaskGetStackHighWaterMark(xTaskLedHandle));
