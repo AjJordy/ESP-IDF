@@ -54,6 +54,7 @@ SemaphoreHandle_t xMutexSemaphore = NULL;
 TaskHandle_t xTaskLedHandle = NULL;
 TaskHandle_t xTaskButtonHandle = NULL;
 TaskHandle_t xTaskPWMHandle = NULL;
+TaskHandle_t xTaskReceiveNotifyHandle = NULL;
 
 TimerHandle_t xTimer1, xTimer2;
 
@@ -454,6 +455,24 @@ void timerTask(void *pvParameters){
 }
 
 
+void notifyTask(void *pvParameters){
+    // BaseType_t xHigherPriorityTaskWoken = pdTRUE;
+    // xTaskNotifyFromISR(xTaskReceiveNotifyHandle, 1, eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
+    xTaskNotify(xTaskReceiveNotifyHandle, 1, eSetValueWithOverwrite);
+    ESP_LOGI("NOTIFY", "Notify task");
+    vTaskDelete(NULL);
+}
+
+
+void receiveNotifyTask(void *pvParameters){
+    uint32_t ulNotifiedValue;
+    while(true){
+        ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);        
+        ESP_LOGI("RECEIVE NOTIFY", "Received notify %d", ulNotifiedValue);
+    }
+}
+
+
 void app_main(void) {
     printf("Program init!\n");
     // esp_log_level_set(TAG, ESP_LOG_NONE);
@@ -491,7 +510,9 @@ void app_main(void) {
     // xTaskCreate(adcTask, "ADC TASK", 2048, NULL, 2, NULL);
     xTaskCreate(adcCallibrateTask, "ADC CALIBRATE TASK", 2048, NULL, 2, NULL);    
     xTaskCreate(temperatureTask, "TEMPERATURE TASK", 2048, NULL, 2, NULL);
-    xTaskCreate(timerTask, "TEMPERATURE TASK", 2048, NULL, 2, NULL);
+    xTaskCreate(timerTask, "TIMER TASK", 2048, NULL, 2, NULL);
+    xTaskCreate(notifyTask, "NOTIFY TASK", 2048, NULL, 2, NULL);
+    xTaskCreate(receiveNotifyTask, "RECEIVE NOTIFY TASK", 2048, NULL, 2, &xTaskReceiveNotifyHandle);
 
     #if SOC_DAC_SUPPORTED
     xTaskCreate(dacTask, "DAC TASK", 2048, NULL, 2, NULL);
@@ -501,7 +522,7 @@ void app_main(void) {
     // Components 
     // int resultado = soma(10, 20);
     // printf("Resultado: %d\n", resultado);
-    // liga_led();
+    // liga_led();    
     
     ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     while(1) {
