@@ -11,23 +11,16 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
+#include "freertos/timers.h"
 
 // ---- ESP32 includes ----
 #include "esp_log.h"
 #include "driver/gpio.h"
-
-// PWM
-#include "driver/ledc.h"
-
-// ADC
-#include "esp_adc/adc_oneshot.h"
-
-// DAC
-#include "driver/dac_oneshot.h"
-#include "driver/dac_cosine.h"
-
-// Temperature
-#include "driver/temperature_sensor.h"
+#include "driver/ledc.h" // PWM
+#include "esp_adc/adc_oneshot.h"// ADC
+#include "driver/dac_oneshot.h" // DAC
+#include "driver/dac_cosine.h"  // DAC
+#include "driver/temperature_sensor.h" // Temperature
 
 
 // My components
@@ -61,6 +54,8 @@ SemaphoreHandle_t xMutexSemaphore = NULL;
 TaskHandle_t xTaskLedHandle = NULL;
 TaskHandle_t xTaskButtonHandle = NULL;
 TaskHandle_t xTaskPWMHandle = NULL;
+
+TimerHandle_t xTimer1, xTimer2;
 
 
 void sendSerialData(char *data) {
@@ -209,7 +204,7 @@ void relayTask(void *pvParameters){
 }
 
 
-void pwmTask(){
+void pwmTask(void *pvParameters){
     ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     // ---------- PWM ----------
     ledc_timer_config_t timer_config = {
@@ -263,7 +258,7 @@ void pwmTask(){
 }
 
 
-void fadeTask(){
+void fadeTask(void *pvParameters){
     // Timer
     ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     ledc_timer_config_t timer_config = {
@@ -319,7 +314,7 @@ void fadeTask(){
 // }
 
 
-void adcCallibrateTask(){
+void adcCallibrateTask(void *pvParameters){
     int adc_raw; 
     int voltage;
     ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
@@ -356,7 +351,7 @@ void adcCallibrateTask(){
 
 
 #if SOC_DAC_SUPPORTED
-void dacTask(){
+void dacTask(void *pvParameters){
     uint8_t val = 0;
     dac_oneshot_handle_t chan0_handle;
     dac_oneshot_config_t chan0_cfg = {
@@ -375,7 +370,7 @@ void dacTask(){
 }
 
 
-void dacCosineTask(){
+void dacCosineTask(void *pvParameters){
     dac_cosine_handle_t chan0_handle;
     dac_cosine_config_t cos0_cfg = {
         .chan_id = DAC_CHAN_0,
@@ -400,7 +395,7 @@ void dacCosineTask(){
 #endif
 
 
-void temperatureTask(){
+void temperatureTask(void *pvParameters){
     ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     ESP_LOGI(TAG, "Install temperature sensor, expected temp ranger range: 10-50 °C");
     temperature_sensor_handle_t temp_sensor = NULL;
@@ -416,6 +411,46 @@ void temperatureTask(){
         ESP_LOGI(TAG, "Temperature value %.02f °C", tsense_value);        
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
+}
+
+
+void timer1_callback(TimerHandle_t xTimer){
+    static uint8_t led_state = 0;
+    gpio_set_level(LED_PIN_3, led_state^=1);
+}
+
+
+void timer2_callback(TimerHandle_t xTimer){
+    gpio_set_level(LED_PIN_3, 0);
+     ESP_LOGI("xTimer2", "Callback");
+}
+
+
+void timerTask(void *pvParameters){
+    #ifdef configUSE_TIMERS    
+    xTimer1 = xTimerCreate("Timer1", pdMS_TO_TICKS(5000),  pdTRUE, (void*)0, timer1_callback); // Auto reload
+    xTimer2 = xTimerCreate("Timer2", pdMS_TO_TICKS(1000), pdFALSE, (void*)0, timer2_callback); // One shot
+
+    xTimerStart(xTimer1, 0); // Init immediately
+    #endif
+
+    TickType_t last_button_press = 0;
+    
+
+    while(true){
+        if (gpio_get_level(BUTTON_PIN_1) == 0) {
+            TickType_t current_time = xTaskGetTickCount();
+            if (current_time - last_button_press >= pdMS_TO_TICKS(250)) {
+                last_button_press = current_time;           
+                gpio_set_level(LED_PIN_3, 1);
+                xTimerStart(xTimer2, 0);
+                ESP_LOGI("xTimer2", "Start");
+            }
+        }
+        
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    
 }
 
 
@@ -456,12 +491,14 @@ void app_main(void) {
     // xTaskCreate(adcTask, "ADC TASK", 2048, NULL, 2, NULL);
     xTaskCreate(adcCallibrateTask, "ADC CALIBRATE TASK", 2048, NULL, 2, NULL);    
     xTaskCreate(temperatureTask, "TEMPERATURE TASK", 2048, NULL, 2, NULL);
+    xTaskCreate(timerTask, "TEMPERATURE TASK", 2048, NULL, 2, NULL);
 
     #if SOC_DAC_SUPPORTED
     xTaskCreate(dacTask, "DAC TASK", 2048, NULL, 2, NULL);
     xTaskCreate(dacCosineTask, "DAC COSINE TASK", 2048, NULL, 2, NULL);    
     #endif
 
+    // Components 
     // int resultado = soma(10, 20);
     // printf("Resultado: %d\n", resultado);
     // liga_led();
