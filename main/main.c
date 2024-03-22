@@ -12,6 +12,7 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "freertos/timers.h"
+#include "freertos/event_groups.h"
 
 // ---- ESP32 includes ----
 #include "esp_log.h"
@@ -58,6 +59,10 @@ TaskHandle_t xTaskReceiveNotifyHandle = NULL;
 
 TimerHandle_t xTimer1, xTimer2;
 
+EventGroupHandle_t xEvents;
+#define TASK_1_BIT (1 << 0) // 1
+#define TASK_2_BIT (1 << 1) // 10
+
 
 void sendSerialData(char *data) {
     printf(data);
@@ -69,7 +74,7 @@ static void IRAM_ATTR gpio_isr_handler(void *arg) {
     uint32_t gpio_num = (uint32_t)arg;
     BaseType_t xHigherPriorityTaskWoken = pdTRUE;
     xQueueSendFromISR(gpio_evt_queue, &gpio_num, xHigherPriorityTaskWoken);
-    xSemaphoreGiveFromISR(xBinarySemaphore, &xHigherPriorityTaskWoken);
+    // xSemaphoreGiveFromISR(xBinarySemaphore, &xHigherPriorityTaskWoken);
 }
 
 
@@ -416,14 +421,28 @@ void temperatureTask(void *pvParameters){
 
 
 void timer1_callback(TimerHandle_t xTimer){
+    static count = 0;
+    count++;
     static uint8_t led_state = 0;
     gpio_set_level(LED_PIN_3, led_state^=1);
+    ESP_LOGI("xTimer1", "Callback timer 1");
+
+    if (count == 5) {
+        xEventGroupSetBits(xEvents, TASK_1_BIT);
+    }
+    else if (count == 10) {
+        xEventGroupSetBits(xEvents, TASK_2_BIT);
+    }
+    else if (count == 15) {
+        count = 0;
+        xEventGroupSetBits(xEvents, TASK_1_BIT | TASK_2_BIT);        
+    }    
 }
 
 
 void timer2_callback(TimerHandle_t xTimer){
     gpio_set_level(LED_PIN_3, 0);
-     ESP_LOGI("xTimer2", "Callback");
+    ESP_LOGI("xTimer2", "Callback timer 2");
 }
 
 
@@ -473,6 +492,30 @@ void receiveNotifyTask(void *pvParameters){
 }
 
 
+void eventGroupTask1(void *pvParameters){
+    while(true) {
+        xEventGroupWaitBits(xEvents, TASK_1_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
+        ESP_LOGI(TAG, "Task 1 saiu do estado de blockeio");
+    }
+}
+
+
+void eventGroupTask2(void *pvParameters){
+    while(true) {
+        xEventGroupWaitBits(xEvents, TASK_2_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
+        ESP_LOGI(TAG, "Task 2 saiu do estado de blockeio");
+    }
+}
+
+
+void eventGroupTask3(void *pvParameters){
+    while(true) {
+        xEventGroupWaitBits(xEvents, TASK_1_BIT | TASK_2_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
+        ESP_LOGI(TAG, "Task 3 saiu do estado de blockeio");
+    }
+}
+
+
 void app_main(void) {
     printf("Program init!\n");
     // esp_log_level_set(TAG, ESP_LOG_NONE);
@@ -490,6 +533,8 @@ void app_main(void) {
     xBinarySemaphore = xSemaphoreCreateBinary();
     // xCountingSemaphore = xSemaphoreCreateCounting(255, 0);
     xMutexSemaphore = xSemaphoreCreateMutex();
+
+    xEvents = xEventGroupCreate();
 
 
     // ---------- Creating tasks ----------
@@ -513,6 +558,11 @@ void app_main(void) {
     xTaskCreate(timerTask, "TIMER TASK", 2048, NULL, 2, NULL);
     xTaskCreate(notifyTask, "NOTIFY TASK", 2048, NULL, 2, NULL);
     xTaskCreate(receiveNotifyTask, "RECEIVE NOTIFY TASK", 2048, NULL, 2, &xTaskReceiveNotifyHandle);
+    
+    // Event group
+    xTaskCreate(eventGroupTask1, "Event group TASK 1", 2048, NULL, 2, NULL);
+    xTaskCreate(eventGroupTask2, "Event group TASK 2", 2048, NULL, 2, NULL);
+    xTaskCreate(eventGroupTask3, "Event group TASK 2", 2048, NULL, 2, NULL);
 
     #if SOC_DAC_SUPPORTED
     xTaskCreate(dacTask, "DAC TASK", 2048, NULL, 2, NULL);
