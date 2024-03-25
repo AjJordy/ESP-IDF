@@ -5,6 +5,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 
 // ---- FreeRTOS includes ----
 #include "freertos/FreeRTOS.h"
@@ -16,6 +17,9 @@
 
 // ---- ESP32 includes ----
 #include "esp_log.h"
+#include "esp_wifi.h" // WiFi
+#include "esp_event.h"
+#include "nvs_flash.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h" // PWM
 #include "esp_adc/adc_oneshot.h"// ADC
@@ -23,12 +27,14 @@
 #include "driver/dac_cosine.h"  // DAC
 #include "driver/temperature_sensor.h" // Temperature
 
-
 // My components
 #include "calculadora.h"
 #include "led.h"
 #include "relay.h"
 #include "adcCalibration.h"
+
+
+#define DEFAULT_SCAN_LIST_SIZE 10
 
 
 #define LED_PIN_1 16
@@ -71,9 +77,9 @@ void sendSerialData(char *data) {
 
 
 static void IRAM_ATTR gpio_isr_handler(void *arg) {
-    uint32_t gpio_num = (uint32_t)arg;
-    BaseType_t xHigherPriorityTaskWoken = pdTRUE;
-    xQueueSendFromISR(gpio_evt_queue, &gpio_num, xHigherPriorityTaskWoken);
+    // uint32_t gpio_num = (uint32_t)arg;
+    // BaseType_t xHigherPriorityTaskWoken = pdTRUE;
+    // xQueueSendFromISR(gpio_evt_queue, &gpio_num, xHigherPriorityTaskWoken);
     // xSemaphoreGiveFromISR(xBinarySemaphore, &xHigherPriorityTaskWoken);
 }
 
@@ -421,7 +427,7 @@ void temperatureTask(void *pvParameters){
 
 
 void timer1_callback(TimerHandle_t xTimer){
-    static count = 0;
+    static uint8_t count = 0;
     count++;
     static uint8_t led_state = 0;
     gpio_set_level(LED_PIN_3, led_state^=1);
@@ -474,45 +480,124 @@ void timerTask(void *pvParameters){
 }
 
 
-void notifyTask(void *pvParameters){
-    // BaseType_t xHigherPriorityTaskWoken = pdTRUE;
-    // xTaskNotifyFromISR(xTaskReceiveNotifyHandle, 1, eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
-    xTaskNotify(xTaskReceiveNotifyHandle, 1, eSetValueWithOverwrite);
-    ESP_LOGI("NOTIFY", "Notify task");
+// void notifyTask(void *pvParameters){
+//     // BaseType_t xHigherPriorityTaskWoken = pdTRUE;
+//     // xTaskNotifyFromISR(xTaskReceiveNotifyHandle, 1, eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
+//     xTaskNotify(xTaskReceiveNotifyHandle, 1, eSetValueWithOverwrite);
+//     ESP_LOGI("NOTIFY", "Notify task");
+//     vTaskDelete(NULL);
+// }
+
+
+// void receiveNotifyTask(void *pvParameters){
+//     int ulNotifiedValue;
+//     while(true){
+//         ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);        
+//         ESP_LOGI("RECEIVE NOTIFY", "Received notify %d", ulNotifiedValue);
+//     }
+// }
+
+
+// void eventGroupTask1(void *pvParameters){
+//     while(true) {
+//         xEventGroupWaitBits(xEvents, TASK_1_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
+//         ESP_LOGI(TAG, "Task 1 saiu do estado de blockeio");
+//     }
+// }
+
+
+// void eventGroupTask2(void *pvParameters){
+//     while(true) {
+//         xEventGroupWaitBits(xEvents, TASK_2_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
+//         ESP_LOGI(TAG, "Task 2 saiu do estado de blockeio");
+//     }
+// }
+
+
+// void eventGroupTask3(void *pvParameters){
+//     while(true) {
+//         xEventGroupWaitBits(xEvents, TASK_1_BIT | TASK_2_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
+//         ESP_LOGI(TAG, "Task 3 saiu do estado de blockeio");
+//     }
+// }
+
+
+char *getAuthModeName(wifi_auth_mode_t wifi_auth_mode){
+    switch (wifi_auth_mode){
+        case WIFI_AUTH_OPEN:
+            return "WIFI_AUTH_OPEN";
+        case WIFI_AUTH_WEP:
+            return "WIFI_AUTH_WEP";
+        case WIFI_AUTH_WPA_PSK:
+            return "WIFI_AUTH_WPA_PSK";
+        case WIFI_AUTH_WPA2_PSK:
+            return "WIFI_AUTH_WPA2_PSK";
+        case WIFI_AUTH_WPA_WPA2_PSK:
+            return "WIFI_AUTH_WPA_WPA2_PSK";
+        case WIFI_AUTH_WPA2_ENTERPRISE:
+            return "WIFI_AUTH_WPA2_ENTERPRISE";
+        case WIFI_AUTH_WPA3_PSK:
+            return "WIFI_AUTH_WPA3_PSK";
+        case WIFI_AUTH_WPA2_WPA3_PSK:
+            return "WIFI_AUTH_WPA2_WPA3_PSK";
+        case WIFI_AUTH_WAPI_PSK:
+            return "WIFI_AUTH_WAPI_PSK";
+        case WIFI_AUTH_OWE:
+            return "WIFI_AUTH_OWE";
+        case WIFI_AUTH_MAX:
+            return "WIFI_AUTH_MAX";
+        default:
+            return "NOT FOUND";
+    }
+}
+
+
+void wifi_scan() {
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
+    assert(sta_netif);
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    uint16_t number = DEFAULT_SCAN_LIST_SIZE;
+    wifi_ap_record_t ap_info[DEFAULT_SCAN_LIST_SIZE];
+    uint16_t ap_count = 0;
+    memset(ap_info, 0, sizeof(ap_info));
+
+    wifi_scan_config_t wifi_scan_config = {};
+
+    esp_wifi_set_mode(WIFI_MODE_STA);
+    esp_wifi_start();
+    esp_wifi_scan_start(&wifi_scan_config, true);
+    esp_wifi_scan_get_ap_records(&number, ap_info);
+    esp_wifi_scan_get_ap_num(&ap_count);
+
+    ESP_LOGI(TAG, "Total APS scanned = %u", ap_count);
+
+    for (int i=0; (i<DEFAULT_SCAN_LIST_SIZE) && (i<ap_count); i++){
+        ESP_LOGI(TAG, "SSID \t\t%s", ap_info[i].ssid);
+        ESP_LOGI(TAG, "RSSI \t\t%d", ap_info[i].rssi);
+        ESP_LOGI(TAG, "Channel \t%d", ap_info[i].primary);
+        ESP_LOGI(TAG, "Authmode \t%s\n", getAuthModeName(ap_info[i].authmode));
+    }
+}
+
+
+void wifiTask(void *pvParameters) {
+
+    // Initialize nvs flash
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    wifi_scan();
+
     vTaskDelete(NULL);
-}
-
-
-void receiveNotifyTask(void *pvParameters){
-    uint32_t ulNotifiedValue;
-    while(true){
-        ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);        
-        ESP_LOGI("RECEIVE NOTIFY", "Received notify %d", ulNotifiedValue);
-    }
-}
-
-
-void eventGroupTask1(void *pvParameters){
-    while(true) {
-        xEventGroupWaitBits(xEvents, TASK_1_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
-        ESP_LOGI(TAG, "Task 1 saiu do estado de blockeio");
-    }
-}
-
-
-void eventGroupTask2(void *pvParameters){
-    while(true) {
-        xEventGroupWaitBits(xEvents, TASK_2_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
-        ESP_LOGI(TAG, "Task 2 saiu do estado de blockeio");
-    }
-}
-
-
-void eventGroupTask3(void *pvParameters){
-    while(true) {
-        xEventGroupWaitBits(xEvents, TASK_1_BIT | TASK_2_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
-        ESP_LOGI(TAG, "Task 3 saiu do estado de blockeio");
-    }
 }
 
 
@@ -556,13 +641,16 @@ void app_main(void) {
     xTaskCreate(adcCallibrateTask, "ADC CALIBRATE TASK", 2048, NULL, 2, NULL);    
     xTaskCreate(temperatureTask, "TEMPERATURE TASK", 2048, NULL, 2, NULL);
     xTaskCreate(timerTask, "TIMER TASK", 2048, NULL, 2, NULL);
-    xTaskCreate(notifyTask, "NOTIFY TASK", 2048, NULL, 2, NULL);
-    xTaskCreate(receiveNotifyTask, "RECEIVE NOTIFY TASK", 2048, NULL, 2, &xTaskReceiveNotifyHandle);
+    // xTaskCreate(notifyTask, "NOTIFY TASK", 2048, NULL, 2, NULL);
+    // xTaskCreate(receiveNotifyTask, "RECEIVE NOTIFY TASK", 2048, NULL, 2, &xTaskReceiveNotifyHandle);
     
     // Event group
-    xTaskCreate(eventGroupTask1, "Event group TASK 1", 2048, NULL, 2, NULL);
-    xTaskCreate(eventGroupTask2, "Event group TASK 2", 2048, NULL, 2, NULL);
-    xTaskCreate(eventGroupTask3, "Event group TASK 2", 2048, NULL, 2, NULL);
+    // xTaskCreate(eventGroupTask1, "Event group TASK 1", 2048, NULL, 2, NULL);
+    // xTaskCreate(eventGroupTask2, "Event group TASK 2", 2048, NULL, 2, NULL);
+    // xTaskCreate(eventGroupTask3, "Event group TASK 2", 2048, NULL, 2, NULL);
+
+    // Wifi
+    xTaskCreate(wifiTask, "WIFI TASK", 4096, NULL, 3, NULL);
 
     #if SOC_DAC_SUPPORTED
     xTaskCreate(dacTask, "DAC TASK", 2048, NULL, 2, NULL);
@@ -578,9 +666,9 @@ void app_main(void) {
     while(1) {
         vTaskDelay(10000 / portTICK_PERIOD_MS);
 
-        xSemaphoreTake(xMutexSemaphore, portMAX_DELAY);
-        sendSerialData(">>>> TASK MAIN\n");
-        xSemaphoreGive(xMutexSemaphore);
+        // xSemaphoreTake(xMutexSemaphore, portMAX_DELAY);
+        // sendSerialData(">>>> TASK MAIN\n");
+        // xSemaphoreGive(xMutexSemaphore);
 
         ESP_LOGI(TAG, "Led High water mark: %d", uxTaskGetStackHighWaterMark(xTaskLedHandle));
         ESP_LOGI(TAG, "Button High water mark: %d", uxTaskGetStackHighWaterMark(xTaskButtonHandle));

@@ -22,6 +22,8 @@
     "gpio.h": "c",
     "esp_log.h": "c",
     "timers.h": "c",
-    "event_groups.h": "c"
+    "event_groups.h": "c",
+    "*.inc": "c",
+    "cstring": "c"
 }
 }
