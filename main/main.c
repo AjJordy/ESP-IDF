@@ -566,13 +566,16 @@ void wifi_scan() {
     uint16_t ap_count = 0;
     memset(ap_info, 0, sizeof(ap_info));
 
-    wifi_scan_config_t wifi_scan_config = {};
+    wifi_scan_config_t wifi_scan_config = {
+        // .show_hidden = true, 
+        // .channel = 2,
+    };
 
-    esp_wifi_set_mode(WIFI_MODE_STA);
-    esp_wifi_start();
-    esp_wifi_scan_start(&wifi_scan_config, true);
-    esp_wifi_scan_get_ap_records(&number, ap_info);
-    esp_wifi_scan_get_ap_num(&ap_count);
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    ESP_ERROR_CHECK(esp_wifi_scan_start(&wifi_scan_config, true));
+    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, ap_info));
+    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_num(&ap_count));
 
     ESP_LOGI(TAG, "Total APS scanned = %u", ap_count);
 
@@ -582,6 +585,11 @@ void wifi_scan() {
         ESP_LOGI(TAG, "Channel \t%d", ap_info[i].primary);
         ESP_LOGI(TAG, "Authmode \t%s\n", getAuthModeName(ap_info[i].authmode));
     }
+
+    ESP_ERROR_CHECK(esp_wifi_stop());
+    ESP_ERROR_CHECK(esp_wifi_deinit());
+    ESP_ERROR_CHECK(esp_event_loop_delete_default());
+    esp_netif_destroy(sta_netif);
 }
 
 
