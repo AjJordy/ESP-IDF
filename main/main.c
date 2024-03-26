@@ -16,22 +16,31 @@
 #include "freertos/event_groups.h"
 
 // ---- ESP32 includes ----
+#include "esp_system.h"
 #include "esp_log.h"
 #include "esp_wifi.h" // WiFi
 #include "esp_event.h"
+#include "esp_adc/adc_oneshot.h"// ADC
+#include "esp_http_client.h"
 #include "nvs_flash.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h" // PWM
-#include "esp_adc/adc_oneshot.h"// ADC
 #include "driver/dac_oneshot.h" // DAC
 #include "driver/dac_cosine.h"  // DAC
 #include "driver/temperature_sensor.h" // Temperature
+
+// Commom component includes 
+#include "protocol_examples_common.h"
+
 
 // My components
 #include "calculadora.h"
 #include "led.h"
 #include "relay.h"
 #include "adcCalibration.h"
+
+#include "wifi.h"
+#include "http_client.h"
 
 
 #define DEFAULT_SCAN_LIST_SIZE 10
@@ -605,6 +614,15 @@ void wifiTask(void *pvParameters) {
 
     wifi_scan();
 
+    // ESP_ERROR_CHECK(esp_netif_init());
+    // ESP_ERROR_CHECK(esp_event_loop_create_default());
+    // ESP_ERROR_CHECK(example_connect());
+    // vTaskDelay(pdMS_TO_TICKS(5000));
+    // http_client_request();
+    // example_disconnect();
+
+    wifi_init_sta();
+    xTaskCreate(&http_client_task, "http_client_task", 4096, NULL, 5, NULL);
     vTaskDelete(NULL);
 }
 
