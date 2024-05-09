@@ -13,6 +13,7 @@
 
 // ---- ESP32 includes ----
 #include "esp_system.h"
+#include "esp_mac.h"
 #include "esp_log.h"
 #include "esp_wifi.h" // WiFi
 #include "esp_event.h"
@@ -160,7 +161,7 @@ char *get_wifi_disconnection_string(wifi_err_reason_t wifi_err_reason)
 }
 
 
-static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data){
+static void sta_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data){
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
     }
@@ -196,18 +197,38 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
 }
 
 
+static void ap_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    if (event_id == WIFI_EVENT_AP_STACONNECTED) {
+        wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
+        ESP_LOGI("WIFI", "station "MACSTR" join, AID=%d", 
+                 MAC2STR(event->mac), event->aid);
+    } else if (event_id ==  WIFI_EVENT_AP_STADISCONNECTED) {
+        wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
+        ESP_LOGI("WIFI", "station "MACSTR" leave, AID=%d", 
+                 MAC2STR(event->mac), event->aid);
+    }
+}
+
+
+void wifi_init(void){
+    ESP_ERROR_CHECK(esp_netif_init());                   // initialize tcp/ip adapter
+    ESP_ERROR_CHECK(esp_event_loop_create_default());    // create default event loop
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT(); // initialize wifi configuration
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));                // initialize wifi with configuration
+    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+}
+
+
 void wifi_init_sta(){
-    wifi_semaphore = xSemaphoreCreateBinary();
+   
+    wifi_init();
     s_wifi_event_group = xEventGroupCreate();
-
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_sta();
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &sta_event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &sta_event_handler, NULL));
+    
 
     wifi_config_t wifi_config = {
         .sta = {
@@ -233,17 +254,43 @@ void wifi_init_sta(){
                     pdFALSE, 
                     portMAX_DELAY);
 
+    wifi_semaphore = xSemaphoreCreateBinary();
     if (bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI("WIFI", "Connected to app SSID: %s password:%s", EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
+        ESP_LOGI("WIFI", "Connected to app SSID: %s password:%s", 
+                EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
         xSemaphoreGive(wifi_semaphore);
-    }
-
-    else if (bits & WIFI_FAIL_BIT){
-        ESP_LOGI("WIFI", "Failed to connected to app SSID: %s password:%s", EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
-    }
-
-    else {
+    } else if (bits & WIFI_FAIL_BIT){
+        ESP_LOGI("WIFI", "Failed to connected to app SSID: %s password:%s", 
+                EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
+    } else {
         ESP_LOGI("WIFI", "UNEXPECTED EVENT");
     }
 
+}
+
+
+void wifi_connect_ap(const char *ssid, const char *pass){
+    wifi_init();
+    ESP_LOGI("WIFI", "ESP_WIFI_MODE_AP");
+    esp_netif_create_default_wifi_ap();
+
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,         // register event handler instance
+                                                        ESP_EVENT_ANY_ID,   // event id
+                                                        &ap_event_handler,  // event handler
+                                                        NULL,               // no event handler arg
+                                                        NULL));             // no event handler instance
+
+    wifi_config_t wifi_config = {};
+    strncpy((char *) wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid) - 1);
+    strncpy((char *) wifi_config.ap.password, pass, sizeof(wifi_config.ap.password) - 1);
+    wifi_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
+    wifi_config.ap.max_connection = 4;
+    wifi_config.ap.beacon_interval = 100;
+    wifi_config.ap.channel = 1;
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    ESP_LOGI("WIFI", "wifi_init_softap finished. SSID: %s password: %s channel: %s",
+             wifi_config.ap.ssid, wifi_config.ap.password, wifi_config.ap.channel);
 }
