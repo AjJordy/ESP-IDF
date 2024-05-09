@@ -51,7 +51,8 @@ void http_client_request(){
     esp_err_t err = esp_http_client_perform(client);
 
     if (err == ESP_OK){
-        ESP_LOGI("HTTP CLIENT", "Status = %i, content_length = %lli", esp_http_client_get_status_code(client), esp_http_client_get_content_length(client));
+        ESP_LOGI("HTTP CLIENT", "Status = %i, content_length = %lli", 
+                esp_http_client_get_status_code(client), esp_http_client_get_content_length(client));
     }
     esp_http_client_cleanup(client);
 }

@@ -622,7 +622,12 @@ void wifiTask(void *pvParameters) {
     // example_disconnect();
 
     wifi_init_sta();
+    // wifi_connect_ap("REDE TESTE", "1234");    
     xTaskCreate(&http_client_task, "http_client_task", 4096, NULL, 5, NULL);
+
+    vTaskDelay(pdMS_TO_TICKS(10000));
+    wifi_disconnect();
+
     vTaskDelete(NULL);
 }
 
