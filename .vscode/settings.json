@@ -29,6 +29,18 @@
     "wifi.h": "c",
     "esp_event.h": "c",
     "http_client.h": "c",
-    "esp_http_client.h": "c"
-}
+    "esp_http_client.h": "c",
+    "freertos.h": "c",
+    "temperature_sensor.h": "c",
+    "relay.h": "c",
+    "led.h": "c",
+    "calculadora.h": "c",
+    "ledc.h": "c",
+    "nvs_flash.h": "c",
+    "task.h": "c",
+    "timer_handler.h": "c",
+    "stdio.h": "c",
+    "esp_system.h": "c",
+    "dac_cosine.h": "c"
+},
 }

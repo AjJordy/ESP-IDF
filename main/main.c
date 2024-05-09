@@ -41,9 +41,7 @@
 
 #include "wifi.h"
 #include "http_client.h"
-
-
-#define DEFAULT_SCAN_LIST_SIZE 10
+#include "timer_handler.h"
 
 
 #define LED_PIN_1 16
@@ -51,6 +49,9 @@
 #define LED_PIN_3 18
 #define BUTTON_PIN_1 9
 // #define BUTTON_PIN_2 20
+
+#define TASK_1_BIT (1 << 0) // 1
+#define TASK_2_BIT (1 << 1) // 10
 
 #define RELAY_PIN_1 21
 #define RELAY_PIN_2 22
@@ -75,8 +76,7 @@ TaskHandle_t xTaskReceiveNotifyHandle = NULL;
 TimerHandle_t xTimer1, xTimer2;
 
 EventGroupHandle_t xEvents;
-#define TASK_1_BIT (1 << 0) // 1
-#define TASK_2_BIT (1 << 1) // 10
+
 
 
 void sendSerialData(char *data) {
@@ -178,7 +178,7 @@ void buttonTask(void *pvParameters) {
 
         // ---------- Reading button ----------
         // int new_state = gpio_get_level(BUTTON_PIN);
-        // if (new_state != button_state) {
+        // if (new_state != button_state) { 
         //     button_state = new_state;
         //     if (!button_state) {
         //         gpio_set_level(LED_PIN_2, led_state^=1);
@@ -312,7 +312,7 @@ void fadeTask(void *pvParameters){
 }
 
 
-// void adcTask(){
+// void adcTask() {
 //     int adc_raw; 
 //     int voltage;
 //     adc_oneshot_unit_handle_t adc1_handle;
@@ -441,7 +441,6 @@ void timer1_callback(TimerHandle_t xTimer){
     static uint8_t led_state = 0;
     gpio_set_level(LED_PIN_3, led_state^=1);
     ESP_LOGI("xTimer1", "Callback timer 1");
-
     if (count == 5) {
         xEventGroupSetBits(xEvents, TASK_1_BIT);
     }
@@ -529,77 +528,6 @@ void timerTask(void *pvParameters){
 //         ESP_LOGI(TAG, "Task 3 saiu do estado de blockeio");
 //     }
 // }
-
-
-char *getAuthModeName(wifi_auth_mode_t wifi_auth_mode){
-    switch (wifi_auth_mode){
-        case WIFI_AUTH_OPEN:
-            return "WIFI_AUTH_OPEN";
-        case WIFI_AUTH_WEP:
-            return "WIFI_AUTH_WEP";
-        case WIFI_AUTH_WPA_PSK:
-            return "WIFI_AUTH_WPA_PSK";
-        case WIFI_AUTH_WPA2_PSK:
-            return "WIFI_AUTH_WPA2_PSK";
-        case WIFI_AUTH_WPA_WPA2_PSK:
-            return "WIFI_AUTH_WPA_WPA2_PSK";
-        case WIFI_AUTH_WPA2_ENTERPRISE:
-            return "WIFI_AUTH_WPA2_ENTERPRISE";
-        case WIFI_AUTH_WPA3_PSK:
-            return "WIFI_AUTH_WPA3_PSK";
-        case WIFI_AUTH_WPA2_WPA3_PSK:
-            return "WIFI_AUTH_WPA2_WPA3_PSK";
-        case WIFI_AUTH_WAPI_PSK:
-            return "WIFI_AUTH_WAPI_PSK";
-        case WIFI_AUTH_OWE:
-            return "WIFI_AUTH_OWE";
-        case WIFI_AUTH_MAX:
-            return "WIFI_AUTH_MAX";
-        default:
-            return "NOT FOUND";
-    }
-}
-
-
-void wifi_scan() {
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
-    assert(sta_netif);
-
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
-    uint16_t number = DEFAULT_SCAN_LIST_SIZE;
-    wifi_ap_record_t ap_info[DEFAULT_SCAN_LIST_SIZE];
-    uint16_t ap_count = 0;
-    memset(ap_info, 0, sizeof(ap_info));
-
-    wifi_scan_config_t wifi_scan_config = {
-        // .show_hidden = true, 
-        // .channel = 2,
-    };
-
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_ERROR_CHECK(esp_wifi_scan_start(&wifi_scan_config, true));
-    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, ap_info));
-    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_num(&ap_count));
-
-    ESP_LOGI(TAG, "Total APS scanned = %u", ap_count);
-
-    for (int i=0; (i<DEFAULT_SCAN_LIST_SIZE) && (i<ap_count); i++){
-        ESP_LOGI(TAG, "SSID \t\t%s", ap_info[i].ssid);
-        ESP_LOGI(TAG, "RSSI \t\t%d", ap_info[i].rssi);
-        ESP_LOGI(TAG, "Channel \t%d", ap_info[i].primary);
-        ESP_LOGI(TAG, "Authmode \t%s\n", getAuthModeName(ap_info[i].authmode));
-    }
-
-    ESP_ERROR_CHECK(esp_wifi_stop());
-    ESP_ERROR_CHECK(esp_wifi_deinit());
-    ESP_ERROR_CHECK(esp_event_loop_delete_default());
-    esp_netif_destroy(sta_netif);
-}
 
 
 void wifiTask(void *pvParameters) {

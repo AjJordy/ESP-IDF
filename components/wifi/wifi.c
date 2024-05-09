@@ -17,12 +17,11 @@
 #include "esp_log.h"
 #include "esp_wifi.h" // WiFi
 #include "esp_event.h"
-#include "esp_http_client.h"
-#include "nvs_flash.h"
-
 
 #include "lwip/err.h"
 #include "lwip/sys.h"
+
+static const char* TAG = "WIFI";
 
 
 #define EXAMPLE_ESP_WIFI_SSID       CONFIG_ESP_WIFI_SSID
@@ -159,6 +158,12 @@ char *get_wifi_disconnection_string(wifi_err_reason_t wifi_err_reason)
         return "WIFI_REASON_ASSOC_COMEBACK_TIME_TOO_LONG";
     case WIFI_REASON_SA_QUERY_TIMEOUT:
         return "WIFI_REASON_SA_QUERY_TIMEOUT";
+    case WIFI_REASON_NO_AP_FOUND_W_COMPATIBLE_SECURITY:
+        return "WIFI_REASON_NO_AP_FOUND_W_COMPATIBLE_SECURITY";
+    case WIFI_REASON_NO_AP_FOUND_IN_AUTHMODE_THRESHOLD:
+        return "WIFI_REASON_NO_AP_FOUND_IN_AUTHMODE_THRESHOLD";
+    case WIFI_REASON_NO_AP_FOUND_IN_RSSI_THRESHOLD:
+        return "WIFI_REASON_NO_AP_FOUND_IN_RSSI_THRESHOLD";
     }
     return "UNKNOWN";
 }
@@ -207,6 +212,78 @@ static void ap_event_handler(void* arg, esp_event_base_t event_base, int32_t eve
         ESP_LOGI("WIFI", "station "MACSTR" leave, AID=%d", 
                  MAC2STR(event->mac), event->aid);
     }
+}
+
+
+char *getAuthModeName(wifi_auth_mode_t wifi_auth_mode){
+    switch (wifi_auth_mode){
+        case WIFI_AUTH_OPEN:
+            return "WIFI_AUTH_OPEN";
+        case WIFI_AUTH_WEP:
+            return "WIFI_AUTH_WEP";
+        case WIFI_AUTH_WPA_PSK:
+            return "WIFI_AUTH_WPA_PSK";
+        case WIFI_AUTH_WPA2_PSK:
+            return "WIFI_AUTH_WPA2_PSK";
+        case WIFI_AUTH_WPA_WPA2_PSK:
+            return "WIFI_AUTH_WPA_WPA2_PSK";
+        case WIFI_AUTH_WPA2_ENTERPRISE:
+            return "WIFI_AUTH_WPA2_ENTERPRISE";
+        case WIFI_AUTH_WPA3_PSK:
+            return "WIFI_AUTH_WPA3_PSK";
+        case WIFI_AUTH_WPA2_WPA3_PSK:
+            return "WIFI_AUTH_WPA2_WPA3_PSK";
+        case WIFI_AUTH_WAPI_PSK:
+            return "WIFI_AUTH_WAPI_PSK";
+        case WIFI_AUTH_OWE:
+            return "WIFI_AUTH_OWE";
+        case WIFI_AUTH_MAX:
+            return "WIFI_AUTH_MAX";
+        default:
+            return "NOT FOUND";
+    }
+}
+
+
+
+void wifi_scan() {
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
+    assert(sta_netif);
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    uint16_t number = DEFAULT_SCAN_LIST_SIZE;
+    wifi_ap_record_t ap_info[DEFAULT_SCAN_LIST_SIZE];
+    uint16_t ap_count = 0;
+    memset(ap_info, 0, sizeof(ap_info));
+
+    wifi_scan_config_t wifi_scan_config = {
+        // .show_hidden = true, 
+        // .channel = 2,
+    };
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    ESP_ERROR_CHECK(esp_wifi_scan_start(&wifi_scan_config, true));
+    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, ap_info));
+    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_num(&ap_count));
+
+    ESP_LOGI(TAG, "Total APS scanned = %u", ap_count);
+
+    for (int i=0; (i<DEFAULT_SCAN_LIST_SIZE) && (i<ap_count); i++){
+        ESP_LOGI(TAG, "SSID \t\t%s", ap_info[i].ssid);
+        ESP_LOGI(TAG, "RSSI \t\t%d", ap_info[i].rssi);
+        ESP_LOGI(TAG, "Channel \t%d", ap_info[i].primary);
+        ESP_LOGI(TAG, "Authmode \t%s\n", getAuthModeName(ap_info[i].authmode));
+    }
+
+    ESP_ERROR_CHECK(esp_wifi_stop());
+    ESP_ERROR_CHECK(esp_wifi_deinit());
+    ESP_ERROR_CHECK(esp_event_loop_delete_default());
+    esp_netif_destroy(sta_netif);
 }
 
 
@@ -292,7 +369,7 @@ void wifi_connect_ap(const char *ssid, const char *pass){
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_LOGI("WIFI", "wifi_init_softap finished. SSID: %s password: %s channel: %s",
+    ESP_LOGI("WIFI", "wifi_init_softap finished. SSID: %s password: %s channel: %d",
              wifi_config.ap.ssid, wifi_config.ap.password, wifi_config.ap.channel);
 }
 
