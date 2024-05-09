@@ -41,6 +41,7 @@
     "timer_handler.h": "c",
     "stdio.h": "c",
     "esp_system.h": "c",
-    "dac_cosine.h": "c"
+    "dac_cosine.h": "c",
+    "mqtt_client.h": "c"
 },
 }

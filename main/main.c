@@ -17,6 +17,7 @@
 
 // ---- ESP32 includes ----
 #include "esp_system.h"
+#include "esp_random.h"
 #include "esp_log.h"
 #include "esp_wifi.h" // WiFi
 #include "esp_event.h"
@@ -34,14 +35,13 @@
 
 
 // My components
-#include "calculadora.h"
 #include "led.h"
 #include "relay.h"
 #include "adcCalibration.h"
 
 #include "wifi.h"
 #include "http_client.h"
-#include "timer_handler.h"
+#include "mqtt_app.h"
 
 
 #define LED_PIN_1 16
@@ -335,7 +335,7 @@ void fadeTask(void *pvParameters){
 // }
 
 
-void adcCallibrateTask(void *pvParameters){
+void adcCallTask(void *pvParameters){
     int adc_raw; 
     int voltage;
     ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
@@ -416,7 +416,7 @@ void dacCosineTask(void *pvParameters){
 #endif
 
 
-void temperatureTask(void *pvParameters){
+void tempTask(void *pvParameters){
     ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     ESP_LOGI(TAG, "Install temperature sensor, expected temp ranger range: 10-50 °C");
     temperature_sensor_handle_t temp_sensor = NULL;
@@ -560,6 +560,30 @@ void wifiTask(void *pvParameters) {
 }
 
 
+void mqttTask(void * pvParameters) {
+    mqtt_app_start();
+    mqtt_app_subscribe("esp32/led1", 0);
+    mqtt_app_subscribe("esp32/led2", 0);
+
+    vTaskDelay(pdTICKS_TO_MS(5000));
+
+    // mqtt_app_unsubscribe("esp32/led1");
+    // mqtt_app_unsubscribe("esp32/led2");
+
+    while (true) {
+        int temperature = esp_random() % 40;
+        char temperature_str[10];
+        sprintf(temperature_str, "%d", temperature);
+
+        if (mqtt_is_connected()) {
+            mqtt_app_publish("esp/temperature", temperature_str, 0, false); 
+            ESP_LOGI("MQTT", "Temperature: %d", temperature);
+        }
+        vTaskDelay(pdTICKS_TO_MS(1000));
+    }    
+}
+
+
 void app_main(void) {
     printf("Program init!\n");
     // esp_log_level_set(TAG, ESP_LOG_NONE);
@@ -592,14 +616,14 @@ void app_main(void) {
     );
 
     // xTaskCreatePinnedToCore(buttonTask, "BUTTON TASK", 2048, NULL, 2, &xTaskButtonHandle, 0);
-    xTaskCreate(buttonTask, "BUTTON TASK", 2048, NULL, 3, &xTaskButtonHandle);
-    xTaskCreate(relayTask, "RELAY TASK", 2048, NULL, 2, NULL);
-    xTaskCreate(pwmTask, "PWM TASK", 2048, NULL, 2, &xTaskPWMHandle);
-    xTaskCreate(fadeTask, "FADE TASK", 2048, NULL, 2, NULL);
+    xTaskCreate(buttonTask,  "BUTTON TASK",   2048, NULL, 3, &xTaskButtonHandle);
+    xTaskCreate(pwmTask,     "PWM TASK",      2048, NULL, 2, &xTaskPWMHandle);
+    xTaskCreate(relayTask,   "RELAY TASK",    2048, NULL, 2, NULL);
+    xTaskCreate(fadeTask,    "FADE TASK",     2048, NULL, 2, NULL);
+    xTaskCreate(timerTask,   "TIMER TASK",    2048, NULL, 2, NULL);
+    xTaskCreate(tempTask,    "TEMPERATURE",   2048, NULL, 2, NULL);
+    xTaskCreate(adcCallTask, "ADC CALIBRATE", 2048, NULL, 2, NULL);    
     // xTaskCreate(adcTask, "ADC TASK", 2048, NULL, 2, NULL);
-    xTaskCreate(adcCallibrateTask, "ADC CALIBRATE TASK", 2048, NULL, 2, NULL);    
-    xTaskCreate(temperatureTask, "TEMPERATURE TASK", 2048, NULL, 2, NULL);
-    xTaskCreate(timerTask, "TIMER TASK", 2048, NULL, 2, NULL);
     // xTaskCreate(notifyTask, "NOTIFY TASK", 2048, NULL, 2, NULL);
     // xTaskCreate(receiveNotifyTask, "RECEIVE NOTIFY TASK", 2048, NULL, 2, &xTaskReceiveNotifyHandle);
     
@@ -608,18 +632,13 @@ void app_main(void) {
     // xTaskCreate(eventGroupTask2, "Event group TASK 2", 2048, NULL, 2, NULL);
     // xTaskCreate(eventGroupTask3, "Event group TASK 2", 2048, NULL, 2, NULL);
 
-    // Wifi
-    xTaskCreate(wifiTask, "WIFI TASK", 4096, NULL, 3, NULL);
+    xTaskCreate(wifiTask, "WIFI TASK", 2048, NULL, 3, NULL);
+    xTaskCreate(mqttTask, "MQTT TASK", 2048, NULL, 3, NULL);
 
     #if SOC_DAC_SUPPORTED
     xTaskCreate(dacTask, "DAC TASK", 2048, NULL, 2, NULL);
     xTaskCreate(dacCosineTask, "DAC COSINE TASK", 2048, NULL, 2, NULL);    
-    #endif
-
-    // Components 
-    // int resultado = soma(10, 20);
-    // printf("Resultado: %d\n", resultado);
-    // liga_led();    
+    #endif   
     
     ESP_LOGI(TAG, "Iniciando a [%s]. CORE[%d]", pcTaskGetName(NULL), xPortGetCoreID());
     while(1) {
@@ -629,8 +648,8 @@ void app_main(void) {
         // sendSerialData(">>>> TASK MAIN\n");
         // xSemaphoreGive(xMutexSemaphore);
 
-        ESP_LOGI(TAG, "Led High water mark: %d", uxTaskGetStackHighWaterMark(xTaskLedHandle));
-        ESP_LOGI(TAG, "Button High water mark: %d", uxTaskGetStackHighWaterMark(xTaskButtonHandle));
-        ESP_LOGI(TAG, "PWM High water mark: %d", uxTaskGetStackHighWaterMark(xTaskPWMHandle));
+        // ESP_LOGI(TAG, "Led High water mark: %d", uxTaskGetStackHighWaterMark(xTaskLedHandle));
+        // ESP_LOGI(TAG, "Button High water mark: %d", uxTaskGetStackHighWaterMark(xTaskButtonHandle));
+        // ESP_LOGI(TAG, "PWM High water mark: %d", uxTaskGetStackHighWaterMark(xTaskPWMHandle));
     }    
 }

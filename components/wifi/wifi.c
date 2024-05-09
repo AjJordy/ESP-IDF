@@ -178,20 +178,15 @@ static void sta_event_handler(void* arg, esp_event_base_t event_base, int32_t ev
         wifi_event_sta_disconnected_t *wifi_event_sta_disconnected = event_data;
         ESP_LOGW("WIFI", "DISCONNECTED %d: %s", wifi_event_sta_disconnected->reason,
                                                 get_wifi_disconnection_string(wifi_event_sta_disconnected->reason));
-        if (attempt_reconnect) {
-             if (wifi_event_sta_disconnected->reason == WIFI_REASON_NO_AP_FOUND ||
-                wifi_event_sta_disconnected->reason == WIFI_REASON_ASSOC_LEAVE ||
-                wifi_event_sta_disconnected->reason == WIFI_REASON_AUTH_EXPIRE)
-            {
-                if (s_retry_num < EXAMPLE_ESP_MAXIMUN_RETRY) {
-                    esp_wifi_connect();
-                    s_retry_num++;
-                    ESP_LOGI("WIFI", "Retry to connect to the AP");
-                } else {
-                    xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
-                    ESP_LOGE("WIFI", "Connect to the AP fail");                    
-                }
-            }       
+        if (attempt_reconnect) {            
+            if (s_retry_num < EXAMPLE_ESP_MAXIMUN_RETRY) {
+                esp_wifi_connect();
+                s_retry_num++;
+                ESP_LOGI("WIFI", "Retry to connect to the AP");
+            } else {
+                xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+                ESP_LOGE("WIFI", "Connect to the AP fail");                    
+            }                   
         }
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP){
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;

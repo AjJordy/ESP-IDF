@@ -551,12 +551,18 @@ CONFIG_EXAMPLE_CONNECT_IPV6_PREF_LOCAL_LINK=y
 # end of Example Connection Configuration
 
 #
-# WiFi Example Configuration
+# MQTT Configuration
+#
+CONFIG_BROKER_URL="mqtt://mqtt.eclipseprojects.io"
+# end of MQTT Configuration
+
+#
+# WiFi Configuration
 #
 CONFIG_ESP_WIFI_SSID="myssid"
 CONFIG_ESP_WIFI_PASSWORD="mypassword"
 CONFIG_ESP_MAXIMUM_RETRY=5
-# end of WiFi Example Configuration
+# end of WiFi Configuration
 
 #
 # Compiler options
