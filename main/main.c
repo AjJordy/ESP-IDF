@@ -571,6 +571,7 @@ void mqttTask(void * pvParameters) {
     // mqtt_app_unsubscribe("esp32/led2");
 
     while (true) {
+        static int i=0;
         int temperature = esp_random() % 40;
         char temperature_str[10];
         sprintf(temperature_str, "%d", temperature);
@@ -580,7 +581,13 @@ void mqttTask(void * pvParameters) {
             ESP_LOGI("MQTT", "Temperature: %d", temperature);
         }
         vTaskDelay(pdTICKS_TO_MS(1000));
+
+        if (i++ == 3) {
+            break;
+        }
     }    
+    mqtt_app_publish("asdfg/status", "Stopped", 0, 0);
+    mqtt_app_stop();
 }
 
 

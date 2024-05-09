@@ -97,3 +97,9 @@ int mqtt_is_connected() {
     }
     return 0;
 }
+
+
+void mqtt_app_stop(void) {
+    esp_mqtt_client_stop(mqtt_client);
+    ESP_LOGI(TAG, "MQTT stoped");
+}
